@@ -1210,6 +1210,19 @@ open_shared_memory(const char *name)
 	return 0;
 }
 
+static void
+connect_mach_channels(void)
+{
+	static dispatch_once_t once;
+
+	dispatch_once(&once, ^{
+		dispatch_mach_connect(global.mach_notifs_channel, global.mach_notify_port,
+				MACH_PORT_NULL, NULL);
+		dispatch_mach_connect(global.mach_channel, global.server_port,
+				MACH_PORT_NULL, NULL);
+	});
+}
+
 int
 main(int argc, const char *argv[])
 {
@@ -1334,15 +1347,14 @@ main(int argc, const char *argv[])
 					notifyd_matching_unregister(event_token);
 					break;
 				case XPC_EVENT_PUBLISHER_ACTION_INITIAL_BARRIER:
-					dispatch_mach_connect(
-							global.mach_notifs_channel, global.mach_notify_port,
-							MACH_PORT_NULL, NULL);
-					dispatch_mach_connect(
-							global.mach_channel, global.server_port,
-							MACH_PORT_NULL, NULL);
+					connect_mach_channels();
 					break;
 				}
 			});
+#ifdef DARLING
+	/* Darling does not yet deliver the XPC publisher's initial barrier. */
+	connect_mach_channels();
+#endif
 	xpc_event_publisher_set_error_handler(publisher, ^(int error) {
 		NOTIFY_INTERNAL_CRASH(error, "Event publisher error");
 	});
